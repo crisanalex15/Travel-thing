@@ -628,3 +628,51 @@ body {
   cursor: pointer;
   accent-color: #4caf50;
 }
+
+.location-input-wrapper {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+}
+
+.location-input-wrapper .tt-input {
+  flex: 1;
+  padding-right: 45px;
+}
+
+.map-picker-btn {
+  position: absolute;
+  right: 5px;
+  background: #4caf50;
+  border: none;
+  width: 35px;
+  height: 35px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.map-picker-btn:hover {
+  background: #388e3c;
+  transform: scale(1.05);
+}
+
+.map-picker-btn:active {
+  transform: scale(0.95);
+}
+
+@media screen and (max-width: 768px) {
+  .location-input-wrapper {
+    width: 100%;
+  }
+
+  .tt-row {
+    flex-direction: column;
+  }
+}

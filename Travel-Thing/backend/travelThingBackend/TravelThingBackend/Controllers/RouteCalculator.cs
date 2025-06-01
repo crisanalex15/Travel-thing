@@ -28,17 +28,50 @@ namespace TravelThingBackend.Controllers
         {
             try
             {
-                if (string.IsNullOrEmpty(request?.StartLocation) || string.IsNullOrEmpty(request?.EndLocation))
+                // Verificăm dacă avem locații sau coordonate
+                bool hasStartLocation = !string.IsNullOrEmpty(request?.StartLocation);
+                bool hasEndLocation = !string.IsNullOrEmpty(request?.EndLocation);
+                bool hasStartCoords = request?.StartCoordinates != null && request.StartCoordinates.Length == 2;
+                bool hasEndCoords = request?.EndCoordinates != null && request.EndCoordinates.Length == 2;
+
+                if (!hasStartLocation && !hasStartCoords)
                 {
-                    return BadRequest(new { error = "Locațiile de start și sfârșit sunt obligatorii" });
+                    return BadRequest(new { error = "Locația sau coordonatele de start sunt obligatorii" });
                 }
 
-                _logger.LogInformation($"Calculare rută de la {request.StartLocation} la {request.EndLocation}");
+                if (!hasEndLocation && !hasEndCoords)
+                {
+                    return BadRequest(new { error = "Locația sau coordonatele de sfârșit sunt obligatorii" });
+                }
 
-                var startCoords = await GetCoordinatesFromLocation(request.StartLocation);
-                var endCoords = await GetCoordinatesFromLocation(request.EndLocation);
+                _logger.LogInformation($"Calculare rută: Start - {(hasStartLocation ? request.StartLocation : $"[{request.StartCoordinates[0]}, {request.StartCoordinates[1]}]")}, End - {(hasEndLocation ? request.EndLocation : $"[{request.EndCoordinates[0]}, {request.EndCoordinates[1]}]")}");
 
-                _logger.LogInformation($"Coordonate găsite - Start: [{startCoords[0]}, {startCoords[1]}], End: [{endCoords[0]}, {endCoords[1]}]");
+                double[] startCoords;
+                double[] endCoords;
+
+                // Obținem coordonatele pentru punctul de start
+                if (hasStartCoords)
+                {
+                    startCoords = request.StartCoordinates;
+                    _logger.LogInformation($"Folosesc coordonate directe pentru start: [{startCoords[0]}, {startCoords[1]}]");
+                }
+                else
+                {
+                    startCoords = await GetCoordinatesFromLocation(request.StartLocation);
+                }
+
+                // Obținem coordonatele pentru punctul de sfârșit
+                if (hasEndCoords)
+                {
+                    endCoords = request.EndCoordinates;
+                    _logger.LogInformation($"Folosesc coordonate directe pentru sfârșit: [{endCoords[0]}, {endCoords[1]}]");
+                }
+                else
+                {
+                    endCoords = await GetCoordinatesFromLocation(request.EndLocation);
+                }
+
+                _logger.LogInformation($"Coordonate finale - Start: [{startCoords[0]}, {startCoords[1]}], End: [{endCoords[0]}, {endCoords[1]}]");
 
                 var url = "https://api.openrouteservice.org/v2/directions/driving-car";
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", API_KEY);
@@ -58,10 +91,18 @@ namespace TravelThingBackend.Controllers
                     format = "json"
                 };
 
+                _logger.LogInformation($"Request către OpenRouteService: {JsonConvert.SerializeObject(requestData)}");
+
                 var content = new StringContent(JsonConvert.SerializeObject(requestData), Encoding.UTF8, "application/json");
                 var response = await _httpClient.PostAsync(url, content);
 
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Eroare OpenRouteService - Status: {response.StatusCode}, Content: {errorContent}");
+                    return BadRequest(new { error = $"Eroare la calcularea rutei: {response.StatusCode}. Verificați coordonatele sau locațiile introduse." });
+                }
+
                 var jsonResponse = await response.Content.ReadAsStringAsync();
                 _logger.LogInformation($"Răspuns primit de la OpenRouteService: {jsonResponse}");
 
@@ -148,8 +189,10 @@ namespace TravelThingBackend.Controllers
 
     public class RouteRequest
     {
-        public string StartLocation { get; set; }
-        public string EndLocation { get; set; }
+        public string? StartLocation { get; set; }
+        public string? EndLocation { get; set; }
+        public double[]? StartCoordinates { get; set; } // [longitude, latitude]
+        public double[]? EndCoordinates { get; set; } // [longitude, latitude]
         public string Preference { get; set; } = "recommended";
     }
 }

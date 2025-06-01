@@ -6,6 +6,7 @@ import { fuelPriceService } from "../services/fuelPriceService";
 import AverageFuelPrices from "../components/AverageFuelPrices";
 import TravelMap from "../components/map/map";
 import Divider from "../components/Divider";
+import LocationPickerModal from "../components/LocationPickerModal";
 
 // Importăm imaginile
 import cutleryIcon from "../components/Images/cutlery.png";
@@ -18,8 +19,8 @@ import churchIcon from "../components/Images/church.png";
 import architectureIcon from "../components/Images/architecture.png";
 import monumentIcon from "../components/Images/monument.png";
 import castleIcon from "../components/Images/castle.png";
-import lakeIcon from "../components/Images/lake.png";
-import beachIcon from "../components/Images/beach.png";
+import lakeIcon from "../components/Images/bed.png";
+import beachIcon from "../components/Images/question-mark.png";
 
 /*const attractionTypeMap = {
   restaurants: "foods,restaurants,fast_food,cuisine,food",
@@ -98,6 +99,10 @@ const attractionTypeMap = {
 export default function Home() {
   const [startLocation, setStartLocation] = useState("");
   const [endLocation, setEndLocation] = useState("");
+  const [startCoordinates, setStartCoordinates] = useState(null);
+  const [endCoordinates, setEndCoordinates] = useState(null);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
   const [consumption, setConsumption] = useState("");
   const [fuelPrice, setFuelPrice] = useState("");
   const [manualPrice, setManualPrice] = useState(false);
@@ -199,10 +204,34 @@ export default function Home() {
 
   const handleRoutePreferenceChange = async (preference) => {
     setRoutePreference(preference);
-    if (startLocation && endLocation) {
+    if (
+      (startLocation || startCoordinates) &&
+      (endLocation || endCoordinates)
+    ) {
       setLoading(true);
       setError(null);
       try {
+        const requestBody = {
+          preference: preference,
+        };
+
+        // Adăugăm locația sau coordonatele de start
+        if (startCoordinates) {
+          requestBody.startCoordinates = [
+            startCoordinates[1],
+            startCoordinates[0],
+          ]; // [lon, lat]
+        } else {
+          requestBody.startLocation = normalizeLocation(startLocation);
+        }
+
+        // Adăugăm locația sau coordonatele de destinație
+        if (endCoordinates) {
+          requestBody.endCoordinates = [endCoordinates[1], endCoordinates[0]]; // [lon, lat]
+        } else {
+          requestBody.endLocation = normalizeLocation(endLocation);
+        }
+
         const response = await fetch(
           "http://localhost:5283/api/RouteCalculator/calculate",
           {
@@ -210,16 +239,16 @@ export default function Home() {
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              startLocation: normalizeLocation(startLocation),
-              endLocation: normalizeLocation(endLocation),
-              preference: preference,
-            }),
+            body: JSON.stringify(requestBody),
           }
         );
 
+        console.log("Request trimis către backend:", requestBody);
+
         if (!response.ok) {
-          throw new Error("Eroare la calcularea rutei");
+          const errorData = await response.json();
+          console.error("Eroare de la backend:", errorData);
+          throw new Error(errorData.error || "Eroare la calcularea rutei");
         }
 
         const data = await response.json();
@@ -235,11 +264,15 @@ export default function Home() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const normalizedStart = normalizeLocation(startLocation);
-    const normalizedEnd = normalizeLocation(endLocation);
 
-    if (!normalizedStart || !normalizedEnd) {
-      setError("Vă rugăm să introduceți ambele locații");
+    // Verificăm dacă avem locații sau coordonate
+    const hasStartData = startLocation || startCoordinates;
+    const hasEndData = endLocation || endCoordinates;
+
+    if (!hasStartData || !hasEndData) {
+      setError(
+        "Vă rugăm să introduceți ambele locații sau să le selectați pe hartă"
+      );
       return;
     }
     if (!consumption || parseFloat(consumption) <= 0) {
@@ -256,6 +289,27 @@ export default function Home() {
     setRouteResult(null);
 
     try {
+      const requestBody = {
+        preference: routePreference,
+      };
+
+      // Adăugăm locația sau coordonatele de start
+      if (startCoordinates) {
+        requestBody.startCoordinates = [
+          startCoordinates[1],
+          startCoordinates[0],
+        ]; // [lon, lat]
+      } else {
+        requestBody.startLocation = normalizeLocation(startLocation);
+      }
+
+      // Adăugăm locația sau coordonatele de destinație
+      if (endCoordinates) {
+        requestBody.endCoordinates = [endCoordinates[1], endCoordinates[0]]; // [lon, lat]
+      } else {
+        requestBody.endLocation = normalizeLocation(endLocation);
+      }
+
       const response = await fetch(
         "http://localhost:5283/api/RouteCalculator/calculate",
         {
@@ -263,16 +317,16 @@ export default function Home() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            startLocation: normalizedStart,
-            endLocation: normalizedEnd,
-            preference: routePreference,
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
+      console.log("Request trimis către backend:", requestBody);
+
       if (!response.ok) {
-        throw new Error("Eroare la calcularea rutei");
+        const errorData = await response.json();
+        console.error("Eroare de la backend:", errorData);
+        throw new Error(errorData.error || "Eroare la calcularea rutei");
       }
 
       const data = await response.json();
@@ -302,9 +356,17 @@ export default function Home() {
       // Folosim valoarea mapată pentru kinds
       const mappedKind = attractionTypeMap[selectedAttraction];
 
-      const url = `http://localhost:5283/api/TouristAttractions/nearbyZone?location=${encodeURIComponent(
-        endLocation
-      )}&radius=${radiusInMeters}&kinds=${mappedKind}`;
+      let url;
+      if (endCoordinates) {
+        // Dacă avem coordonate, le folosim direct
+        url = `http://localhost:5283/api/TouristAttractions/nearbyZone?lat=${endCoordinates[0]}&lon=${endCoordinates[1]}&radius=${radiusInMeters}&kinds=${mappedKind}`;
+      } else {
+        // Altfel folosim numele locației
+        url = `http://localhost:5283/api/TouristAttractions/nearbyZone?location=${encodeURIComponent(
+          endLocation
+        )}&radius=${radiusInMeters}&kinds=${mappedKind}`;
+      }
+
       console.log("URL request:", url);
 
       const response = await fetch(url, {
@@ -316,7 +378,7 @@ export default function Home() {
       console.log("Response status:", response.status);
       console.log("Mapped kind:", mappedKind);
       console.log("Radius in meters:", radiusInMeters);
-      console.log("End location:", endLocation);
+      console.log("End location/coordinates:", endCoordinates || endLocation);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -366,6 +428,20 @@ export default function Home() {
     }
   };
 
+  const handleStartLocationSelect = (coords) => {
+    setStartCoordinates(coords);
+    setStartLocation(
+      `📍 Coordonate: ${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`
+    );
+  };
+
+  const handleEndLocationSelect = (coords) => {
+    setEndCoordinates(coords);
+    setEndLocation(
+      `📍 Coordonate: ${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`
+    );
+  };
+
   return (
     <>
       <div className="home-container">
@@ -377,22 +453,56 @@ export default function Home() {
         {error && <div className="tt-error">{error}</div>}
         <form className="tt-form" onSubmit={handleSubmit}>
           <div className="tt-row">
-            <Input
-              type="text"
-              placeholder="Introdu punctul de plecare..."
-              value={startLocation}
-              onChange={(e) => setStartLocation(e.target.value)}
-              onBlur={(e) =>
-                setStartLocation(normalizeLocation(e.target.value))
-              }
-            />
-            <Input
-              type="text"
-              placeholder="Introdu punctul de sosire..."
-              value={endLocation}
-              onChange={(e) => setEndLocation(e.target.value)}
-              onBlur={(e) => setEndLocation(normalizeLocation(e.target.value))}
-            />
+            <div className="location-input-wrapper">
+              <Input
+                type="text"
+                placeholder="Introdu punctul de plecare..."
+                value={startLocation}
+                onChange={(e) => {
+                  setStartLocation(e.target.value);
+                  setStartCoordinates(null); // Resetăm coordonatele când se modifică textul
+                }}
+                onBlur={(e) => {
+                  if (!startCoordinates) {
+                    // Normalizăm doar dacă nu sunt coordonate setate
+                    setStartLocation(normalizeLocation(e.target.value));
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="map-picker-btn"
+                onClick={() => setShowStartPicker(true)}
+                title="Selectează pe hartă"
+              >
+                📍
+              </button>
+            </div>
+            <div className="location-input-wrapper">
+              <Input
+                type="text"
+                placeholder="Introdu punctul de sosire..."
+                value={endLocation}
+                onChange={(e) => {
+                  setEndLocation(e.target.value);
+                  setEndCoordinates(null); // Resetăm coordonatele când se modifică textul
+                }}
+                onBlur={(e) => {
+                  if (!endCoordinates) {
+                    // Normalizăm doar dacă nu sunt coordonate setate
+                    setEndLocation(normalizeLocation(e.target.value));
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="map-picker-btn"
+                onClick={() => setShowEndPicker(true)}
+                title="Selectează pe hartă"
+              >
+                📍
+              </button>
+            </div>
           </div>
           <div className="tt-row">
             <Input
@@ -757,6 +867,22 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      <LocationPickerModal
+        isOpen={showStartPicker}
+        onClose={() => setShowStartPicker(false)}
+        onLocationSelect={handleStartLocationSelect}
+        title="Selectează punctul de plecare"
+        existingLocation={startCoordinates}
+      />
+
+      <LocationPickerModal
+        isOpen={showEndPicker}
+        onClose={() => setShowEndPicker(false)}
+        onLocationSelect={handleEndLocationSelect}
+        title="Selectează punctul de sosire"
+        existingLocation={endCoordinates}
+      />
     </>
   );
 }

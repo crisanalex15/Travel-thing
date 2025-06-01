@@ -174,15 +174,35 @@ public class TouristAttractionsController : ControllerBase
 
     [HttpGet("nearbyZone")]
     public async Task<IActionResult> GetNearbyAttractions(
-        string location,
+        string location = null,
+        double? lat = null,
+        double? lon = null,
         int radius = 10000,
         string kinds = "interesting_places")
     {
         try
         {
-            var coordinates = await GetCoordinatesFromLocation(location);
-            var lon = coordinates[0];
-            var lat = coordinates[1];
+            double latitude;
+            double longitude;
+
+            // Verificăm dacă avem coordonate sau locație
+            if (lat.HasValue && lon.HasValue)
+            {
+                latitude = lat.Value;
+                longitude = lon.Value;
+                _logger.LogInformation($"Folosesc coordonate directe: [{longitude}, {latitude}]");
+            }
+            else if (!string.IsNullOrEmpty(location))
+            {
+                var coordinates = await GetCoordinatesFromLocation(location);
+                longitude = coordinates[0];
+                latitude = coordinates[1];
+                _logger.LogInformation($"Coordonate obținute pentru {location}: [{longitude}, {latitude}]");
+            }
+            else
+            {
+                return BadRequest(new { error = "Trebuie să specificați fie o locație, fie coordonate (lat/lon)" });
+            }
 
             // Împărțim kinds în array și eliminăm spațiile
             var kindsArray = kinds.Split(',').Select(k => k.Trim()).ToArray();
@@ -192,7 +212,7 @@ public class TouristAttractionsController : ControllerBase
             {
                 try
                 {
-                    var url = $"{BaseUrl}/radius?radius={radius}&lon={lon}&lat={lat}&kinds={kind}&format=json&apikey={ApiKey}";
+                    var url = $"{BaseUrl}/radius?radius={radius}&lon={longitude}&lat={latitude}&kinds={kind}&format=json&apikey={ApiKey}";
                     _logger.LogInformation($"Căutare pentru kind: {kind}, URL: {url}");
 
                     var response = await _httpClient.GetAsync(url);
@@ -231,7 +251,7 @@ public class TouristAttractionsController : ControllerBase
                                 var lonDetail = point.GetProperty("lon").GetDouble();
 
                                 // Calculăm distanța
-                                var distance = CalculateDistance(lat, lon, latDetail, lonDetail);
+                                var distance = CalculateDistance(latitude, longitude, latDetail, lonDetail);
 
                                 // Generăm link-ul către Google Maps
                                 var mapsUrl = $"https://www.google.com/maps/search/?api=1&query={latDetail},{lonDetail}";
