@@ -64,6 +64,38 @@ namespace TravelThingBackend.Controllers
             }
         }
 
+        [HttpPost("test-update")]
+        public async Task<IActionResult> TestUpdate([FromQuery] string city = "Cluj")
+        {
+            try
+            {
+                _logger.LogInformation("Testing price update for city: {City}", city);
+                
+                // Testăm doar pentru un oraș și un tip de combustibil
+                var testResult = await _fuelPriceService.TestSingleCityUpdate(city, "Benzina_Regular");
+                
+                return Ok(new 
+                { 
+                    success = testResult.Success,
+                    city = city,
+                    fuel_type = "Benzina_Regular",
+                    price = testResult.Price,
+                    message = testResult.Message,
+                    debug_info = testResult.DebugInfo
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Test update failed");
+                return Ok(new 
+                { 
+                    success = false,
+                    error = ex.Message,
+                    message = "Test update failed"
+                });
+            }
+        }
+
         [HttpGet("average")]
         public async Task<ActionResult<Dictionary<string, decimal>>> GetAveragePrices()
         {

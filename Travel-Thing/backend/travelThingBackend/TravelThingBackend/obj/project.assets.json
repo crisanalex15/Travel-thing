@@ -7659,11 +7659,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\crisa\\Downloads\\travel-thing-main\\travel-thing-main\\Travel-Thing\\backend\\travelThingBackend\\TravelThingBackend\\TravelThingBackend.csproj",
+      "projectUniqueName": "C:\\Users\\crisa\\travel-thing\\Travel-Thing\\backend\\travelThingBackend\\TravelThingBackend\\TravelThingBackend.csproj",
       "projectName": "TravelThingBackend",
-      "projectPath": "C:\\Users\\crisa\\Downloads\\travel-thing-main\\travel-thing-main\\Travel-Thing\\backend\\travelThingBackend\\TravelThingBackend\\TravelThingBackend.csproj",
+      "projectPath": "C:\\Users\\crisa\\travel-thing\\Travel-Thing\\backend\\travelThingBackend\\TravelThingBackend\\TravelThingBackend.csproj",
       "packagesPath": "C:\\Users\\crisa\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\crisa\\Downloads\\travel-thing-main\\travel-thing-main\\Travel-Thing\\backend\\travelThingBackend\\TravelThingBackend\\obj\\",
+      "outputPath": "C:\\Users\\crisa\\travel-thing\\Travel-Thing\\backend\\travelThingBackend\\TravelThingBackend\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

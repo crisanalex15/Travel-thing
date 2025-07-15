@@ -291,6 +291,8 @@ export default function Home() {
     try {
       const requestBody = {
         preference: routePreference,
+        fuelType: fuelType,
+        fuelConsumption: parseFloat(consumption),
       };
 
       // Adăugăm locația sau coordonatele de start
@@ -310,31 +312,67 @@ export default function Home() {
         requestBody.endLocation = normalizeLocation(endLocation);
       }
 
-      const response = await fetch(
-        "http://localhost:5283/api/RouteCalculator/calculate",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        }
+      console.log(
+        "🚗 Request trimis către endpoint-ul inteligent:",
+        requestBody
       );
 
-      console.log("Request trimis către backend:", requestBody);
+      // Folosim serviciul actualizat
+      const data = await fuelPriceService.calculateRouteWithFuel(requestBody);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Eroare de la backend:", errorData);
-        throw new Error(errorData.error || "Eroare la calcularea rutei");
-      }
+      console.log("✅ Răspuns primit:", data);
 
-      const data = await response.json();
-      setRouteResult(data);
+      // Adaptăm răspunsul pentru interfața existentă
+      const adaptedResult = {
+        distance: data.route.distance,
+        duration: data.route.duration,
+        geometry: data.route.geometry,
+        fuelCalculation: data.fuelCalculation,
+        smartRouting: data.fuelCalculation.smart_routing,
+        priceSource: data.fuelCalculation.price_source,
+        recommendations: data.recommendations,
+      };
+
+      setRouteResult(adaptedResult);
       setShowAttractions(true);
     } catch (error) {
-      console.error("Eroare:", error);
-      setError("Nu s-a putut calcula ruta. Vă rugăm să încercați din nou.");
+      console.error("❌ Eroare cu endpoint-ul inteligent:", error);
+
+      // Fallback la metoda tradițională
+      console.log("🔄 Încercăm metoda tradițională...");
+      try {
+        const fallbackRequestBody = {
+          preference: routePreference,
+        };
+
+        if (startCoordinates) {
+          fallbackRequestBody.startCoordinates = [
+            startCoordinates[1],
+            startCoordinates[0],
+          ];
+        } else {
+          fallbackRequestBody.startLocation = normalizeLocation(startLocation);
+        }
+
+        if (endCoordinates) {
+          fallbackRequestBody.endCoordinates = [
+            endCoordinates[1],
+            endCoordinates[0],
+          ];
+        } else {
+          fallbackRequestBody.endLocation = normalizeLocation(endLocation);
+        }
+
+        const fallbackData = await fuelPriceService.calculateBasicRoute(
+          fallbackRequestBody
+        );
+        setRouteResult(fallbackData);
+        setShowAttractions(true);
+        console.log("✅ Fallback reușit");
+      } catch (fallbackError) {
+        console.error("❌ Eroare și cu fallback:", fallbackError);
+        setError("Nu s-a putut calcula ruta. Vă rugăm să încercați din nou.");
+      }
     } finally {
       setLoading(false);
     }

@@ -31,6 +31,15 @@ namespace TravelThingBackend.Models
         public const string Timisoara = "Timisoara";
         public const string Suceava = "Suceava";
 
+        public const string Brasov = "Brasov";
+        public const string Sibiu = "Sibiu";
+        public const string Oradea = "Oradea";
+        public const string Iasi = "Iasi";
+        public const string Bacau = "Bacau";
+        public const string Botosani = "Botosani";
+        public const string SatuMare = "Satu Mare";
+        public const string TarguMures = "Targu Mures";
+
         public static readonly string[] AllCities = new[]
         {
             Cluj,
@@ -40,7 +49,15 @@ namespace TravelThingBackend.Models
             Ilfov,
             Arad,
             Timisoara,
-            Suceava
+            Suceava,
+            Brasov,
+            Sibiu,
+            Oradea,
+            Iasi,
+            Bacau,
+            Botosani,
+            SatuMare,
+            TarguMures
         };
     }
 

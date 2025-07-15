@@ -18,8 +18,46 @@ export interface FuelPrice {
   lastUpdated: string;
 }
 
-export interface AveragePrices {
-  [key: string]: number;
+export type AveragePrices = Record<string, number>;
+
+// Interfețe pentru noul endpoint inteligent
+export interface RouteWithFuelRequest {
+  startLocation?: string;
+  endLocation?: string;
+  startCoordinates?: number[]; // [longitude, latitude]
+  endCoordinates?: number[]; // [longitude, latitude]
+  preference?: string;
+  fuelType?: string;
+  fuelConsumption?: number;
+}
+
+export interface RouteWithFuelResponse {
+  route: {
+    distance: {
+      meters: number;
+      kilometers: number;
+    };
+    duration: {
+      seconds: number;
+      minutes: number;
+      hours: number;
+    };
+    geometry: string;
+  };
+  fuelCalculation: {
+    distance_km: number;
+    fuel_type: string;
+    consumption_per_100km: number;
+    fuel_needed_liters: number;
+    fuel_price_per_liter: number;
+    total_fuel_cost: number;
+    price_source: string;
+    smart_routing: string;
+  };
+  recommendations: {
+    save_money_tip: string;
+    fuel_stations: string;
+  };
 }
 
 export const fuelPriceService = {
@@ -74,6 +112,59 @@ export const fuelPriceService = {
       return new Date(response.data);
     } catch (error) {
       console.error("Eroare la obținerea datei ultimei actualizări:", error);
+      throw error;
+    }
+  },
+
+  // 🚀 NOUA FUNCȚIE INTELIGENTĂ pentru calcul rutei cu combustibil
+  async calculateRouteWithFuel(
+    request: RouteWithFuelRequest
+  ): Promise<RouteWithFuelResponse> {
+    try {
+      console.log("🚗 Se calculează ruta cu endpoint-ul inteligent:", request);
+
+      // Mapăm tipurile de combustibil din frontend la backend
+      const fuelTypeMapping: Record<string, string> = {
+        "Motorina Premium": "Motorina_Premium",
+        "Motorina Standard": "Motorina_Regular",
+        "Benzina Standard": "Benzina_Regular",
+        "Benzina Superioara": "Benzina_Premium",
+        GPL: "GPL",
+      };
+
+      const requestData = {
+        ...request,
+        fuelType: request.fuelType
+          ? fuelTypeMapping[request.fuelType] || "Benzina_Regular"
+          : "Benzina_Regular",
+      };
+
+      const response = await axios.post(
+        `${API_URL}/RouteCalculator/calculate-with-fuel`,
+        requestData
+      );
+
+      console.log("✅ Răspuns de la endpoint-ul inteligent:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("❌ Eroare la calculul rutei cu combustibil:", error);
+      throw error;
+    }
+  },
+
+  // Funcție de fallback pentru calculul tradițional
+  async calculateBasicRoute(
+    request: Omit<RouteWithFuelRequest, "fuelType" | "fuelConsumption">
+  ) {
+    try {
+      console.log("📍 Se calculează ruta basic:", request);
+      const response = await axios.post(
+        `${API_URL}/RouteCalculator/calculate`,
+        request
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Eroare la calculul rutei basic:", error);
       throw error;
     }
   },

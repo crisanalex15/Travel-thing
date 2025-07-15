@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "0tCPoBVEDG0=",
+  "dgSpecHash": "RrdUVjM8tEA=",
   "success": true,
-  "projectFilePath": "C:\\Users\\crisa\\Downloads\\travel-thing-main\\travel-thing-main\\Travel-Thing\\backend\\travelThingBackend\\TravelThingBackend\\TravelThingBackend.csproj",
+  "projectFilePath": "C:\\Users\\crisa\\travel-thing\\Travel-Thing\\backend\\travelThingBackend\\TravelThingBackend\\TravelThingBackend.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\crisa\\.nuget\\packages\\htmlagilitypack\\1.12.1\\htmlagilitypack.1.12.1.nupkg.sha512",
     "C:\\Users\\crisa\\.nuget\\packages\\humanizer\\2.14.1\\humanizer.2.14.1.nupkg.sha512",
