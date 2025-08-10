@@ -6,7 +6,6 @@ import { fuelPriceService } from "../services/fuelPriceService";
 import AverageFuelPrices from "../components/AverageFuelPrices";
 import TravelMap from "../components/map/map";
 import Divider from "../components/Divider";
-import LocationPickerModal from "../components/LocationPickerModal";
 
 // Importăm imaginile
 import cutleryIcon from "../components/Images/cutlery.png";
@@ -101,8 +100,8 @@ export default function Home() {
   const [endLocation, setEndLocation] = useState("");
   const [startCoordinates, setStartCoordinates] = useState(null);
   const [endCoordinates, setEndCoordinates] = useState(null);
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [isSelectingLocation, setIsSelectingLocation] = useState(false);
+  const [selectionType, setSelectionType] = useState(null); // 'start' sau 'end'
   const [consumption, setConsumption] = useState("");
   const [fuelPrice, setFuelPrice] = useState("");
   const [manualPrice, setManualPrice] = useState(false);
@@ -120,6 +119,10 @@ export default function Home() {
   const [foundLocations, setFoundLocations] = useState([]);
   const [numberOfPeople, setNumberOfPeople] = useState(1);
   const [showSplitCost, setShowSplitCost] = useState(false);
+  const [showExpandedAttractions, setShowExpandedAttractions] = useState(false);
+  const [maxAttractions, setMaxAttractions] = useState(5);
+  const [selectedAttractionCoords, setSelectedAttractionCoords] =
+    useState(null);
 
   const fuelTypes = [
     "Motorina Premium",
@@ -265,6 +268,9 @@ export default function Home() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Reset expanded attractions view la începutul unei noi căutări
+    setShowExpandedAttractions(false);
+
     // Verificăm dacă avem locații sau coordonate
     const hasStartData = startLocation || startCoordinates;
     const hasEndData = endLocation || endCoordinates;
@@ -290,32 +296,40 @@ export default function Home() {
 
     try {
       const requestBody = {
-        preference: routePreference,
-        fuelType: fuelType,
-        fuelConsumption: parseFloat(consumption),
+        Preference: routePreference,
+        FuelType: fuelType,
+        FuelConsumption: parseFloat(consumption),
       };
 
       // Adăugăm locația sau coordonatele de start
       if (startCoordinates) {
-        requestBody.startCoordinates = [
+        requestBody.StartCoordinates = [
           startCoordinates[1],
           startCoordinates[0],
         ]; // [lon, lat]
       } else {
-        requestBody.startLocation = normalizeLocation(startLocation);
+        requestBody.StartLocation = normalizeLocation(startLocation);
       }
 
       // Adăugăm locația sau coordonatele de destinație
       if (endCoordinates) {
-        requestBody.endCoordinates = [endCoordinates[1], endCoordinates[0]]; // [lon, lat]
+        requestBody.EndCoordinates = [endCoordinates[1], endCoordinates[0]]; // [lon, lat]
       } else {
-        requestBody.endLocation = normalizeLocation(endLocation);
+        requestBody.EndLocation = normalizeLocation(endLocation);
       }
 
       console.log(
         "🚗 Request trimis către endpoint-ul inteligent:",
         requestBody
       );
+
+      // Validăm datele înainte de trimitere
+      if (!requestBody.StartLocation && !requestBody.StartCoordinates) {
+        throw new Error("Lipsește locația de start");
+      }
+      if (!requestBody.EndLocation && !requestBody.EndCoordinates) {
+        throw new Error("Lipsește locația de destinație");
+      }
 
       // Folosim serviciul actualizat
       const data = await fuelPriceService.calculateRouteWithFuel(requestBody);
@@ -334,7 +348,6 @@ export default function Home() {
       };
 
       setRouteResult(adaptedResult);
-      setShowAttractions(true);
     } catch (error) {
       console.error("❌ Eroare cu endpoint-ul inteligent:", error);
 
@@ -342,32 +355,31 @@ export default function Home() {
       console.log("🔄 Încercăm metoda tradițională...");
       try {
         const fallbackRequestBody = {
-          preference: routePreference,
+          Preference: routePreference,
         };
 
         if (startCoordinates) {
-          fallbackRequestBody.startCoordinates = [
+          fallbackRequestBody.StartCoordinates = [
             startCoordinates[1],
             startCoordinates[0],
           ];
         } else {
-          fallbackRequestBody.startLocation = normalizeLocation(startLocation);
+          fallbackRequestBody.StartLocation = normalizeLocation(startLocation);
         }
 
         if (endCoordinates) {
-          fallbackRequestBody.endCoordinates = [
+          fallbackRequestBody.EndCoordinates = [
             endCoordinates[1],
             endCoordinates[0],
           ];
         } else {
-          fallbackRequestBody.endLocation = normalizeLocation(endLocation);
+          fallbackRequestBody.EndLocation = normalizeLocation(endLocation);
         }
 
         const fallbackData = await fuelPriceService.calculateBasicRoute(
           fallbackRequestBody
         );
         setRouteResult(fallbackData);
-        setShowAttractions(true);
         console.log("✅ Fallback reușit");
       } catch (fallbackError) {
         console.error("❌ Eroare și cu fallback:", fallbackError);
@@ -466,461 +478,513 @@ export default function Home() {
     }
   };
 
-  const handleStartLocationSelect = (coords) => {
-    setStartCoordinates(coords);
-    setStartLocation(
-      `📍 Coordonate: ${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`
-    );
+  const handleLocationSelect = (coords, type) => {
+    if (type === "start") {
+      setStartCoordinates(coords);
+      setStartLocation(
+        `📍 Coordonate: ${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`
+      );
+    } else if (type === "end") {
+      setEndCoordinates(coords);
+      setEndLocation(
+        `📍 Coordonate: ${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`
+      );
+    }
+
+    // Oprim modul de selecție
+    setIsSelectingLocation(false);
+    setSelectionType(null);
   };
 
-  const handleEndLocationSelect = (coords) => {
-    setEndCoordinates(coords);
-    setEndLocation(
-      `📍 Coordonate: ${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`
-    );
+  const startLocationSelection = (type) => {
+    setIsSelectingLocation(true);
+    setSelectionType(type);
+  };
+
+  const showAttractionOnMap = (location) => {
+    if (location.coordinates) {
+      console.log(
+        "Afișez atracția pe hartă:",
+        location.name,
+        location.coordinates
+      );
+      // Setez coordonatele pentru a centra harta pe această atracție
+      setSelectedAttractionCoords([
+        location.coordinates[0], // latitude
+        location.coordinates[1], // longitude
+      ]);
+    }
   };
 
   return (
-    <>
+    <div className="container">
       <div className="home-container">
-        <h1 className="tt-title">Travel Thing (DEMO)</h1>
-        <p className="tt-subtitle">
-          Calculator de călătorii și atracții turistice
-        </p>
-        {loading && <div className="tt-loading">Se încarcă prețurile...</div>}
-        {error && <div className="tt-error">{error}</div>}
-        <form className="tt-form" onSubmit={handleSubmit}>
-          <div className="tt-row">
-            <div className="location-input-wrapper">
-              <Input
-                type="text"
-                placeholder="Introdu punctul de plecare..."
-                value={startLocation}
-                onChange={(e) => {
-                  setStartLocation(e.target.value);
-                  setStartCoordinates(null); // Resetăm coordonatele când se modifică textul
-                }}
-                onBlur={(e) => {
-                  if (!startCoordinates) {
-                    // Normalizăm doar dacă nu sunt coordonate setate
-                    setStartLocation(normalizeLocation(e.target.value));
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="map-picker-btn"
-                onClick={() => setShowStartPicker(true)}
-                title="Selectează pe hartă"
-              >
-                📍
-              </button>
-            </div>
-            <div className="location-input-wrapper">
-              <Input
-                type="text"
-                placeholder="Introdu punctul de sosire..."
-                value={endLocation}
-                onChange={(e) => {
-                  setEndLocation(e.target.value);
-                  setEndCoordinates(null); // Resetăm coordonatele când se modifică textul
-                }}
-                onBlur={(e) => {
-                  if (!endCoordinates) {
-                    // Normalizăm doar dacă nu sunt coordonate setate
-                    setEndLocation(normalizeLocation(e.target.value));
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="map-picker-btn"
-                onClick={() => setShowEndPicker(true)}
-                title="Selectează pe hartă"
-              >
-                📍
-              </button>
-            </div>
-          </div>
-          <div className="tt-row">
-            <Input
-              type="number"
-              placeholder="Introdu consumul mediu (L/100km)"
-              value={consumption}
-              onChange={(e) => setConsumption(e.target.value)}
-            />
-            <select
-              className="tt-select"
-              value={fuelType}
-              onChange={(e) => setFuelType(e.target.value)}
-            >
-              {fuelTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="tt-route-preferences">
-            {routePreferences.map((pref) => (
-              <button
-                key={pref.value}
-                type="button"
-                className={`tt-route-btn ${
-                  routePreference === pref.value ? "active" : ""
-                }`}
-                onClick={() => handleRoutePreferenceChange(pref.value)}
-              >
-                <span className="tt-route-icon">{pref.icon}</span>
-                {pref.label}
-              </button>
-            ))}
-          </div>
-          <div className="tt-form-group">
-            <Button type="button" onClick={() => setManualPrice(!manualPrice)}>
-              {manualPrice ? "Preț manual" : "Preț automat"}
-            </Button>
-            {manualPrice ? (
-              <Input
-                type="number"
-                placeholder="Introdu prețul carburantului (RON/L)"
-                value={fuelPrice}
-                onChange={(e) => setFuelPrice(e.target.value)}
-              />
-            ) : (
-              <div className="tt-auto-price">
-                <span className="desktop-price">
-                  Preț automat pentru {fuelType}:{" "}
-                  {fuelPrices[fuelType] || "Se încarcă..."} RON/L
-                </span>
-                <span className="mobile-price">
-                  Preț automat: {fuelPrices[fuelType] || "..."} RON/L
-                </span>
-              </div>
-            )}
-            <div className="tt-form-group-checkbox">
-              <p>Include dus-întors</p>
-              <input
-                type="checkbox"
-                checked={isRoundTrip}
-                onChange={(e) => setIsRoundTrip(e.target.checked)}
-              />
-            </div>
-          </div>
+        <div className="header-section">
+          <h1 className="tt-title">Travel Thing (DEMO)</h1>
+          <p className="tt-subtitle">
+            Calculator de călătorii și atracții turistice
+          </p>
+          {loading && <div className="tt-loading">Se încarcă prețurile...</div>}
+          {error && <div className="tt-error">{error}</div>}
+        </div>
 
-          <Button type="submit" disabled={loading}>
-            {loading ? "Se calculează..." : "Calculează"}
-          </Button>
-        </form>
+        <div className="main-content">
+          {/* Coloana stângă - Formular */}
+          <div className="form-section">
+            <form className="tt-form" onSubmit={handleSubmit}>
+              <div className="form-group">
+                <h3>Date rută</h3>
+                <div className="location-inputs">
+                  <div className="location-input-wrapper">
+                    <Input
+                      type="text"
+                      placeholder="Introdu punctul de plecare..."
+                      value={startLocation}
+                      onChange={(e) => {
+                        setStartLocation(e.target.value);
+                        setStartCoordinates(null);
+                      }}
+                      onBlur={(e) => {
+                        if (!startCoordinates) {
+                          setStartLocation(normalizeLocation(e.target.value));
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="map-picker-btn"
+                      onClick={() => startLocationSelection("start")}
+                      title="Selectează pe hartă"
+                    >
+                      📍
+                    </button>
+                  </div>
+                  <div className="location-input-wrapper">
+                    <Input
+                      type="text"
+                      placeholder="Introdu punctul de sosire..."
+                      value={endLocation}
+                      onChange={(e) => {
+                        setEndLocation(e.target.value);
+                        setEndCoordinates(null);
+                      }}
+                      onBlur={(e) => {
+                        if (!endCoordinates) {
+                          setEndLocation(normalizeLocation(e.target.value));
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="map-picker-btn"
+                      onClick={() => startLocationSelection("end")}
+                      title="Selectează pe hartă"
+                    >
+                      📍
+                    </button>
+                  </div>
+                </div>
 
-        {routeResult && (
-          <div className="tt-result">
-            <h3>Rezultate ruta:</h3>
-            <div className="tt-result-details">
-              <p>
-                Distanță:{" "}
-                {routeResult.distance.kilometers * (isRoundTrip ? 2 : 1)} km
-              </p>
-              <p>
-                Durată:{" "}
-                {formatDuration(
-                  routeResult.duration.hours * (isRoundTrip ? 2 : 1),
-                  routeResult.duration.minutes * (isRoundTrip ? 2 : 1)
-                )}
-              </p>
-              {consumptionResult.error ? (
-                <p className="tt-warning">{consumptionResult.error}</p>
-              ) : (
-                <>
-                  <p>Consum carburant: {consumptionResult.fuelNeeded} L</p>
-                  <p>Cost carburant total: {consumptionResult.totalCost} RON</p>
-                  <div className="tt-split-option">
-                    <label className="tt-checkbox-label">
+                <div className="fuel-inputs">
+                  <Input
+                    type="number"
+                    placeholder="Introdu consumul mediu (L/100km)"
+                    value={consumption}
+                    onChange={(e) => setConsumption(e.target.value)}
+                  />
+                  <select
+                    className="tt-select"
+                    value={fuelType}
+                    onChange={(e) => setFuelType(e.target.value)}
+                  >
+                    {fuelTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="route-preferences">
+                  {routePreferences.map((pref) => (
+                    <button
+                      key={pref.value}
+                      type="button"
+                      className={`tt-route-btn ${
+                        routePreference === pref.value ? "active" : ""
+                      }`}
+                      onClick={() => handleRoutePreferenceChange(pref.value)}
+                    >
+                      <span className="tt-route-icon">{pref.icon}</span>
+                      {pref.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="price-settings">
+                  <div className="price-toggle">
+                    <span className="toggle-label">Preț automat</span>
+                    <label className="toggle-switch">
                       <input
                         type="checkbox"
-                        checked={showSplitCost}
-                        onChange={(e) => setShowSplitCost(e.target.checked)}
+                        checked={manualPrice}
+                        onChange={(e) => setManualPrice(e.target.checked)}
                       />
-                      Împarte costul cu prietenii
+                      <span className="slider"></span>
                     </label>
+                    <span className="toggle-label">Preț manual</span>
                   </div>
-                  {showSplitCost && (
-                    <div className="tt-split-cost">
-                      <div className="tt-split-input">
-                        <label htmlFor="numberOfPeople">
-                          Împarte costul între:
-                        </label>
-                        <input
-                          type="number"
-                          id="numberOfPeople"
-                          min="1"
-                          value={numberOfPeople}
-                          onChange={(e) =>
-                            setNumberOfPeople(
-                              Math.max(1, parseInt(e.target.value) || 1)
-                            )
-                          }
-                          className="tt-number-input"
-                        />
-                        <span>persoane</span>
-                      </div>
-                      <p className="tt-split-result">
-                        Cost per persoană:{" "}
-                        {(consumptionResult.totalCost / numberOfPeople).toFixed(
-                          2
-                        )}{" "}
-                        RON
-                      </p>
+                  {manualPrice ? (
+                    <Input
+                      type="number"
+                      placeholder="Introdu prețul carburantului (RON/L)"
+                      value={fuelPrice}
+                      onChange={(e) => setFuelPrice(e.target.value)}
+                    />
+                  ) : (
+                    <div className="tt-auto-price">
+                      <span className="desktop-price">
+                        Preț automat pentru {fuelType}:{" "}
+                        {fuelPrices[fuelType] || "Se încarcă..."} RON/L
+                      </span>
+                      <span className="mobile-price">
+                        Preț automat: {fuelPrices[fuelType] || "..."} RON/L
+                      </span>
                     </div>
                   )}
-                </>
-              )}
-            </div>
-            <Divider />
-            <TravelMap
-              geometry={routeResult.geometry}
-              startLocation={startLocation}
-              endLocation={endLocation}
-            />
-          </div>
-        )}
+                </div>
 
-        {showAttractions && (
-          <>
-            <Divider />
-            <div className="tt-attractions">
-              <h3>Cautare atracții turistice</h3>
-              <Input
-                min="0.1"
-                max="10"
-                step="0.1"
-                type="number"
-                className="tt-attractions-form-input"
-                placeholder="Raza de cautare (km | ex 0.5)"
-                value={radius}
-                onChange={(e) => setRadius(e.target.value)}
-              />
-              <div className="tt-attractions-form">
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "restaurants"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("restaurants")}
-                >
-                  <p>Restaurante</p>
-                  <img src={cutleryIcon} alt="Restaurante" />
+                <div className="checkbox-options">
+                  <div className="modern-checkbox-group">
+                    <label className="modern-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={isRoundTrip}
+                        onChange={(e) => setIsRoundTrip(e.target.checked)}
+                      />
+                      <span className="checkmark"></span>
+                      <span className="checkbox-text">Include dus-întors</span>
+                    </label>
+                  </div>
+
+                  <div className="modern-checkbox-group">
+                    <label className="modern-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={showAttractions}
+                        onChange={(e) => setShowAttractions(e.target.checked)}
+                      />
+                      <span className="checkmark"></span>
+                      <span className="checkbox-text">
+                        Caută atracții turistice
+                      </span>
+                    </label>
+
+                    {/* Slider pentru raza de căutare */}
+                    {showAttractions && (
+                      <div className="attractions-count-slider">
+                        <label className="slider-label">
+                          Raza de căutare: <strong>{radius || 5}km</strong>
+                        </label>
+                        <div className="range-slider-wrapper">
+                          <input
+                            type="range"
+                            min="0.5"
+                            max="10"
+                            step="0.5"
+                            value={radius || 5}
+                            onChange={(e) => setRadius(e.target.value)}
+                            className="range-slider"
+                          />
+                          <div className="range-labels">
+                            <span>0.5km</span>
+                            <span>10km</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "cafes"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("cafes")}
-                >
-                  <p>Cafenele</p>
-                  <img src={cafeIcon} alt="Cafenele" />
+
+                <Button type="submit" disabled={loading} className="tt-btn">
+                  {loading ? "Se calculează..." : "Calculează ruta"}
+                </Button>
+              </div>
+
+              {/* Secțiunea pentru atracții turistice */}
+              {showAttractions && routeResult && (
+                <div className="form-group attractions-form-group">
+                  <h3>Atracții turistice</h3>
+
+                  <div className="attraction-types">
+                    {[
+                      {
+                        key: "restaurants",
+                        label: "Restaurante",
+                        icon: cutleryIcon,
+                      },
+                      { key: "cafes", label: "Cafenele", icon: cafeIcon },
+                      { key: "parks", label: "Parcuri", icon: parkIcon },
+                      { key: "museums", label: "Muzee", icon: museumIcon },
+                      { key: "theaters", label: "Teatre", icon: theaterIcon },
+                      { key: "shops", label: "Magazine", icon: shopIcon },
+                      { key: "churches", label: "Biserici", icon: churchIcon },
+                      {
+                        key: "architecture",
+                        label: "Arhitectură",
+                        icon: architectureIcon,
+                      },
+                      {
+                        key: "monuments",
+                        label: "Monumente",
+                        icon: monumentIcon,
+                      },
+                      { key: "castles", label: "Cetăți", icon: castleIcon },
+                      { key: "lakes", label: "Cazări", icon: lakeIcon },
+                      {
+                        key: "beaches",
+                        label: "Alte locații",
+                        icon: beachIcon,
+                      },
+                    ].map(({ key, label, icon }) => (
+                      <div
+                        key={key}
+                        className={`attraction-type ${
+                          selectedAttraction === key ? "selected" : ""
+                        }`}
+                        onClick={() => handleAttractionClick(key)}
+                      >
+                        <img src={icon} alt={label} />
+                        <span>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="attractions-buttons">
+                    <Button
+                      type="button"
+                      disabled={loading || !selectedAttraction || !radius}
+                      onClick={handleSearchAttractions}
+                      className="tt-btn"
+                    >
+                      {loading ? "Se caută..." : "Caută atracții"}
+                    </Button>
+
+                    {foundLocations.length > 0 && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setFoundLocations([]);
+                          setSelectedAttraction(null);
+                          setSelectedAttractionCoords(null);
+                        }}
+                        className="tt-btn cancel-btn"
+                      >
+                        ✕ Anulează căutarea
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "parks"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("parks")}
-                >
-                  <p>Parcuri</p>
-                  <img src={parkIcon} alt="Parcuri" />
+              )}
+            </form>
+
+            {/* Secțiunea expandată de atracții */}
+            {foundLocations.length > 0 && (
+              <div className="tourist-attractions">
+                <div className="attractions-header">
+                  <h3>Atracții găsite ({foundLocations.length})</h3>
                 </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "museums"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("museums")}
-                >
-                  <p>Muzee</p>
-                  <img src={museumIcon} alt="Muzee" />
-                </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "theaters"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("theaters")}
-                >
-                  <p>Teatre și divertisment</p>
-                  <img src={theaterIcon} alt="Teatre și divertisment" />
-                </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "shops"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("shops")}
-                >
-                  <p>Magazine</p>
-                  <img src={shopIcon} alt="Magazine" />
-                </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "churches"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("churches")}
-                >
-                  <p>Biserici</p>
-                  <img src={churchIcon} alt="Biserici" />
-                </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "architecture"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("architecture")}
-                >
-                  <p>Arhitectură</p>
-                  <img src={architectureIcon} alt="Arhitectură" />
-                </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "monuments"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("monuments")}
-                >
-                  <p>Monumente</p>
-                  <img src={monumentIcon} alt="Monumente" />
-                </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "castles"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("castles")}
-                >
-                  <p>Cetați</p>
-                  <img src={castleIcon} alt="Cetați" />
-                </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "lakes"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("lakes")}
-                >
-                  <p>Cazări</p>
-                  <img src={lakeIcon} alt="Cazări" />
-                </div>
-                <div
-                  className={`tt-attractions-form-image ${
-                    selectedAttraction === "beaches"
-                      ? "selected"
-                      : selectedAttraction
-                      ? "disabled"
-                      : ""
-                  }`}
-                  onClick={() => handleAttractionClick("beaches")}
-                >
-                  <p>Alte locații</p>
-                  <img src={beachIcon} alt="Alte locații" />
+                <div className="attractions-grid">
+                  {foundLocations.map((location, index) => (
+                    <div key={index} className="attraction-card">
+                      <h4>{location.name}</h4>
+                      {location.description && (
+                        <div className="attraction-description">
+                          {location.description}
+                        </div>
+                      )}
+                      <div className="attraction-distance">
+                        <strong>Distanță de la rută:</strong>{" "}
+                        {location.distance
+                          ? location.distance < 1000
+                            ? `${Math.round(location.distance * 1000)}m`
+                            : `${(location.distance / 1000).toFixed(1)}km`
+                          : "Necunoscută"}
+                      </div>
+                      <div className="attraction-buttons">
+                        {location.coordinates && (
+                          <button
+                            onClick={() => showAttractionOnMap(location)}
+                            className="show-on-map-btn"
+                            style={{
+                              background: "#4caf50",
+                              color: "white",
+                              border: "none",
+                              padding: "0.5rem 0.75rem",
+                              borderRadius: "6px",
+                            }}
+                          >
+                            📍 Arată pe hartă
+                          </button>
+                        )}
+                        <a
+                          href={
+                            location.coordinates
+                              ? `https://www.google.com/maps/place/${location.coordinates[0]},${location.coordinates[1]}/@${location.coordinates[0]},${location.coordinates[1]},17z`
+                              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                  location.name
+                                )}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="maps-link"
+                        >
+                          🗺️ Arată-mi pe Maps
+                        </a>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <Button
-                type="button"
-                disabled={loading}
-                className="tt-attractions-form-button"
-                onClick={handleSearchAttractions}
-              >
-                {loading ? "Se caută..." : "Caută"}
-              </Button>
-            </div>
-          </>
-        )}
+            )}
+          </div>
 
-        {foundLocations.length > 0 && (
-          <div className="locations-container">
-            <h2>Locații găsite</h2>
-            <div className="locations-grid">
-              {foundLocations.map((location, index) => (
-                <div key={index} className="location-card">
-                  <h3>{location.name}</h3>
-                  <p className="location-description">
-                    {location.description ||
-                      "Momentan nu avem informații despre această locație."}
-                  </p>
-                  <p className="location-distance">
-                    Distanță:{" "}
-                    {location.distance
-                      ? location.distance < 1000
-                        ? `${Math.round(location.distance * 1000)} metri`
-                        : `${(location.distance / 1000).toFixed(2)} km`
-                      : "Necunoscută"}
-                  </p>
-                  {location.mapsUrl && (
-                    <a
-                      href={location.mapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="location-link"
-                    >
-                      Vezi pe Google Maps
-                    </a>
-                  )}
-                </div>
-              ))}
+          {/* Coloana dreaptă - Hartă și rezultate */}
+          <div className="results-section">
+            <div className="combined-container">
+              {/* Harta */}
+              <div className="map-section">
+                <TravelMap
+                  geometry={routeResult?.geometry}
+                  startLocation={startLocation}
+                  endLocation={endLocation}
+                  isSelectingLocation={isSelectingLocation}
+                  selectionType={selectionType}
+                  onLocationSelect={handleLocationSelect}
+                  startCoordinates={startCoordinates}
+                  endCoordinates={endCoordinates}
+                  selectedAttractionCoords={selectedAttractionCoords}
+                  foundLocations={foundLocations}
+                />
+              </div>
+
+              {/* Detalii */}
+              <div className="details-section">
+                {routeResult && (
+                  <div className="route-results">
+                    <h3>Rezultate rută</h3>
+                    <div className="result-details">
+                      <div className="result-item">
+                        <strong>Distanță:</strong>{" "}
+                        {routeResult.distance.kilometers *
+                          (isRoundTrip ? 2 : 1)}{" "}
+                        km
+                      </div>
+                      <div className="result-item">
+                        <strong>Durată:</strong>{" "}
+                        {formatDuration(
+                          routeResult.duration.hours * (isRoundTrip ? 2 : 1),
+                          routeResult.duration.minutes * (isRoundTrip ? 2 : 1)
+                        )}
+                      </div>
+
+                      {consumptionResult.error ? (
+                        <div className="tt-warning">
+                          {consumptionResult.error}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="result-item">
+                            <strong>Consum carburant:</strong>{" "}
+                            {consumptionResult.fuelNeeded} L
+                          </div>
+                          <div className="result-item">
+                            <strong>Cost total:</strong>{" "}
+                            {consumptionResult.totalCost} RON
+                          </div>
+
+                          <div className="split-cost-section">
+                            <label className="checkbox-label">
+                              <input
+                                type="checkbox"
+                                checked={showSplitCost}
+                                onChange={(e) =>
+                                  setShowSplitCost(e.target.checked)
+                                }
+                              />
+                              Împarte costul cu prietenii
+                            </label>
+                            {showSplitCost && (
+                              <div className="split-cost-inputs">
+                                <label htmlFor="numberOfPeople">
+                                  Numărul de persoane:
+                                </label>
+                                <input
+                                  type="number"
+                                  id="numberOfPeople"
+                                  min="1"
+                                  value={numberOfPeople}
+                                  onChange={(e) =>
+                                    setNumberOfPeople(
+                                      Math.max(1, parseInt(e.target.value) || 1)
+                                    )
+                                  }
+                                  className="number-input"
+                                />
+                                <div className="split-result">
+                                  <strong>Cost per persoană:</strong>{" "}
+                                  {(
+                                    consumptionResult.totalCost / numberOfPeople
+                                  ).toFixed(2)}{" "}
+                                  RON
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {foundLocations.length > 0 && (
+                        <div className="attractions-in-results">
+                          <h4>Atracții găsite ({foundLocations.length})</h4>
+                          <div className="attractions-compact">
+                            {foundLocations
+                              .slice(0, 3)
+                              .map((location, index) => (
+                                <div key={index} className="attraction-compact">
+                                  <strong>{location.name}</strong>
+                                  <span className="distance-compact">
+                                    {location.distance
+                                      ? location.distance < 1000
+                                        ? `${Math.round(
+                                            location.distance * 1000
+                                          )}m`
+                                        : `${(location.distance / 1000).toFixed(
+                                            1
+                                          )}km`
+                                      : "?"}
+                                  </span>
+                                </div>
+                              ))}
+                            {foundLocations.length > 3 && (
+                              <div
+                                className="more-attractions clickable"
+                                onClick={() => setShowExpandedAttractions(true)}
+                              >
+                                +{foundLocations.length - 3} mai multe
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
-
-      <LocationPickerModal
-        isOpen={showStartPicker}
-        onClose={() => setShowStartPicker(false)}
-        onLocationSelect={handleStartLocationSelect}
-        title="Selectează punctul de plecare"
-        existingLocation={startCoordinates}
-      />
-
-      <LocationPickerModal
-        isOpen={showEndPicker}
-        onClose={() => setShowEndPicker(false)}
-        onLocationSelect={handleEndLocationSelect}
-        title="Selectează punctul de sosire"
-        existingLocation={endCoordinates}
-      />
-    </>
+    </div>
   );
 }

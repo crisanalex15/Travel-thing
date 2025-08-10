@@ -1,11 +1,12 @@
+import React, { useEffect, useState } from "react";
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
   Polyline,
+  useMapEvents,
 } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import icon from "leaflet/dist/images/marker-icon.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
@@ -22,6 +23,23 @@ let DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
+
+// Componenta pentru gestionarea click-urilor pe hartă
+function MapClickHandler({
+  isSelectingLocation,
+  selectionType,
+  onLocationSelect,
+}) {
+  useMapEvents({
+    click(e) {
+      if (isSelectingLocation) {
+        const coords = [e.latlng.lat, e.latlng.lng];
+        onLocationSelect(coords, selectionType);
+      }
+    },
+  });
+  return null;
+}
 
 // Funcție pentru calcularea zoom-ului în funcție de distanță
 const calculateZoom = (coordinates) => {
@@ -49,61 +67,200 @@ const calculateZoom = (coordinates) => {
   return 13; // Pentru distanțe foarte mici (în aceeași zonă)
 };
 
-export default function TravelMap({ geometry, startLocation, endLocation }) {
+export default function TravelMap({
+  geometry,
+  startLocation,
+  endLocation,
+  isSelectingLocation = false,
+  selectionType = null,
+  onLocationSelect = null,
+  startCoordinates = null,
+  endCoordinates = null,
+  selectedAttractionCoords = null,
+  foundLocations = [],
+}) {
+  // Setez iconurile o singură dată, global
+  if (!window.leafletIconsFixed) {
+    try {
+      if (L && L.Icon && L.Icon.Default) {
+        delete L.Icon.Default.prototype._getIconUrl;
+        L.Icon.Default.mergeOptions({
+          iconUrl: icon,
+          iconRetinaUrl: icon,
+          shadowUrl: iconShadow,
+        });
+        window.leafletIconsFixed = true;
+      }
+    } catch (error) {
+      console.error("Eroare la setarea iconurilor:", error);
+    }
+  }
+
   // Decode polyline to coordinates
   const coordinates = geometry
     ? decode(geometry).map((coord) => [coord[0], coord[1]])
     : [];
 
-  // Calculate center point between start and end locations
-  const center =
-    coordinates.length > 0
-      ? [
-          (coordinates[0][0] + coordinates[coordinates.length - 1][0]) / 2,
-          (coordinates[0][1] + coordinates[coordinates.length - 1][1]) / 2,
-        ]
-      : [45.967, 25.26]; // Default center if no coordinates
+  // Setările pentru România când nu există o rută
+  const romaniaCenter = [45.9442, 25.0094]; // Centrul României (aproximativ Brașov)
+  const romaniaZoom = 7; // Zoom potrivit pentru a vedea toată România
 
-  // Calculăm zoom-ul în funcție de coordonate
-  const zoom = calculateZoom(coordinates);
+  // Calculate center point based on priority:
+  // 1. Selected attraction coordinates (if any)
+  // 2. Route center (if exists)
+  // 3. Romania center (default)
+  const center = selectedAttractionCoords
+    ? selectedAttractionCoords
+    : coordinates.length > 0
+    ? [
+        (coordinates[0][0] + coordinates[coordinates.length - 1][0]) / 2,
+        (coordinates[0][1] + coordinates[coordinates.length - 1][1]) / 2,
+      ]
+    : romaniaCenter;
+
+  // Calculate zoom based on priority:
+  // 1. Higher zoom for selected attraction
+  // 2. Route zoom (if exists)
+  // 3. Romania zoom (default)
+  const zoom = selectedAttractionCoords
+    ? 15 // High zoom for attraction
+    : coordinates.length > 0
+    ? calculateZoom(coordinates)
+    : romaniaZoom;
+
+  // Fix pentru redimensionarea hărții
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const mapElements = document.querySelectorAll(".leaflet-container");
+      mapElements.forEach((element) => {
+        if (element._leaflet_map) {
+          element._leaflet_map.invalidateSize();
+        }
+      });
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [geometry, startCoordinates, endCoordinates, selectedAttractionCoords]);
 
   return (
-    <MapContainer
-      center={center}
-      zoom={zoom}
-      scrollWheelZoom={true}
-      style={{
-        height: "700px",
-        width: "100%",
-        border: "3px solid #4caf50",
-        borderRadius: "16px",
-        boxShadow: "0 8px 16px rgba(0,0,0,0.2)",
-        overflow: "hidden",
-      }}
-    >
-      <TileLayer
-        attribution="&copy; OpenStreetMap contributors"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {coordinates.length > 0 && (
-        <>
-          <Marker position={coordinates[0]}>
-            <Popup>{startLocation || "Punct de plecare"}</Popup>
-          </Marker>
-          <Marker
-            position={coordinates[coordinates.length - 1]}
-            className="end-marker"
-          >
-            <Popup>{endLocation || "Punct de sosire"}</Popup>
-          </Marker>
-          <Polyline
-            positions={coordinates}
-            color="#4caf50"
-            weight={3}
-            opacity={0.7}
-          />
-        </>
+    <div style={{ position: "relative" }}>
+      {isSelectingLocation && (
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            left: "10px",
+            background: "#4caf50",
+            color: "white",
+            padding: "8px 12px",
+            borderRadius: "4px",
+            zIndex: 1000,
+            fontSize: "14px",
+            fontWeight: "500",
+          }}
+        >
+          {selectionType === "start"
+            ? "Selectează punctul de plecare"
+            : "Selectează punctul de sosire"}
+        </div>
       )}
-    </MapContainer>
+      <MapContainer
+        center={center}
+        zoom={zoom}
+        scrollWheelZoom={true}
+        style={{
+          height: "100%",
+          width: "100%",
+          minHeight: "700px",
+          border: isSelectingLocation
+            ? "3px solid #ff9800"
+            : "3px solid #4caf50",
+          borderRadius: "16px",
+          boxShadow: "0 8px 16px rgba(0,0,0,0.2)",
+          overflow: "hidden",
+          cursor: isSelectingLocation ? "crosshair" : "grab",
+        }}
+        whenCreated={(mapInstance) => {
+          // Forțează redimensionarea corectă a hărții
+          setTimeout(() => {
+            mapInstance.invalidateSize();
+          }, 100);
+        }}
+      >
+        <TileLayer
+          attribution="&copy; OpenStreetMap contributors"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <MapClickHandler
+          isSelectingLocation={isSelectingLocation}
+          selectionType={selectionType}
+          onLocationSelect={onLocationSelect}
+        />
+        {coordinates.length > 0 && (
+          <>
+            <Marker position={coordinates[0]}>
+              <Popup>{startLocation || "Punct de plecare"}</Popup>
+            </Marker>
+            <Marker
+              position={coordinates[coordinates.length - 1]}
+              className="end-marker"
+            >
+              <Popup>{endLocation || "Punct de sosire"}</Popup>
+            </Marker>
+            <Polyline
+              positions={coordinates}
+              color="#4caf50"
+              weight={3}
+              opacity={0.7}
+            />
+          </>
+        )}
+
+        {/* Markerii pentru locațiile selectate manual (fără rută) */}
+        {!coordinates.length && startCoordinates && (
+          <Marker position={startCoordinates}>
+            <Popup>{startLocation || "Punct de plecare selectat"}</Popup>
+          </Marker>
+        )}
+
+        {!coordinates.length && endCoordinates && (
+          <Marker position={endCoordinates}>
+            <Popup>{endLocation || "Punct de sosire selectat"}</Popup>
+          </Marker>
+        )}
+
+        {/* Markerii pentru atracțiile găsite */}
+        {foundLocations.map((location, index) => {
+          if (location.coordinates) {
+            return (
+              <Marker
+                key={`attraction-${index}`}
+                position={[location.coordinates[0], location.coordinates[1]]}
+              >
+                <Popup>
+                  <div>
+                    <strong>{location.name}</strong>
+                    {location.description && (
+                      <p style={{ margin: "5px 0", fontSize: "0.9rem" }}>
+                        {location.description}
+                      </p>
+                    )}
+                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                      Distanță:{" "}
+                      {location.distance
+                        ? location.distance < 1000
+                          ? `${Math.round(location.distance * 1000)}m`
+                          : `${(location.distance / 1000).toFixed(1)}km`
+                        : "Necunoscută"}
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          }
+          return null;
+        })}
+      </MapContainer>
+    </div>
   );
 }

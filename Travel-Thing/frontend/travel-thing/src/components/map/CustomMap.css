@@ -4,7 +4,7 @@
 }
 
 .custom-map {
-  height: 700px !important; /* FOARTE important */
+  height: 100% !important; /* FOARTE important */
   width: 100%;
   border: 1px solid #4caf50;
 }

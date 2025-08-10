@@ -22,13 +22,13 @@ export type AveragePrices = Record<string, number>;
 
 // Interfețe pentru noul endpoint inteligent
 export interface RouteWithFuelRequest {
-  startLocation?: string;
-  endLocation?: string;
-  startCoordinates?: number[]; // [longitude, latitude]
-  endCoordinates?: number[]; // [longitude, latitude]
-  preference?: string;
-  fuelType?: string;
-  fuelConsumption?: number;
+  StartLocation?: string;
+  EndLocation?: string;
+  StartCoordinates?: number[]; // [longitude, latitude]
+  EndCoordinates?: number[]; // [longitude, latitude]
+  Preference?: string;
+  FuelType?: string;
+  FuelConsumption?: number;
 }
 
 export interface RouteWithFuelResponse {
@@ -134,8 +134,8 @@ export const fuelPriceService = {
 
       const requestData = {
         ...request,
-        fuelType: request.fuelType
-          ? fuelTypeMapping[request.fuelType] || "Benzina_Regular"
+        FuelType: request.FuelType
+          ? fuelTypeMapping[request.FuelType] || "Benzina_Regular"
           : "Benzina_Regular",
       };
 
@@ -154,7 +154,7 @@ export const fuelPriceService = {
 
   // Funcție de fallback pentru calculul tradițional
   async calculateBasicRoute(
-    request: Omit<RouteWithFuelRequest, "fuelType" | "fuelConsumption">
+    request: Omit<RouteWithFuelRequest, "FuelType" | "FuelConsumption">
   ) {
     try {
       console.log("📍 Se calculează ruta basic:", request);

@@ -1,6 +1,6 @@
 import React from "react";
+import "leaflet/dist/leaflet.css";
 import Home from "./pages/Home";
-import TravelMap from "./components/map/map.jsx";
 
 function App() {
   return (
