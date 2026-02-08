@@ -31,3 +31,8 @@ Aplicația oferă și sugestii de obiective turistice în zona de destinație.
   - [OpenRouteService](https://openrouteservice.org/)
   - [OpenChargeMap](https://openchargemap.org/)
   - Web scraping prețuri carburanți (Petrom, OMV, MOL etc.)
+
+  ## IMAGE: 
+  <img width="1790" height="884" alt="image" src="https://github.com/user-attachments/assets/ea9ab255-09f8-444c-bbaf-c341addd46b1" />
+
+
